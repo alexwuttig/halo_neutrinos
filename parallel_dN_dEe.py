@@ -287,7 +287,7 @@ def dN_dEe_r(Ee, t):
     - returns - 
     differential number density at a given time
     '''
-    r_min = 30
+    r_min = 0
     r_max = 100
     rs = np.linspace(r_min, r_max, 12)
     
