@@ -17,7 +17,7 @@ class Params:
         self.Ecut = 1e6           # electron cutoff energy (GeV)
 
         # diffusion parameters
-        self.rh = 30 + 1000       # transition radius [pc]
+        self.rh = 30*conv_pc_cm       # transition radius [pc]
         self.D0 = 1e26            # cm^2/s (inner zone)
         self.Dism = 4e28          # cm^2/s (outer zone)
         self.del_exponent = 1/3   # spectral index of diffusion coefficient

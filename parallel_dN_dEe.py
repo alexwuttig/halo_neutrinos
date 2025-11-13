@@ -100,7 +100,7 @@ def E0_val(Ee, tau):
     there isn't any well defined values
     '''
     value = B_anti(Ee) + tau
-    return E0_spline(value)
+    return float(E0_spline(value))
 
 def diffusion_hoop(Ee, r):
     ''' 
@@ -151,10 +151,22 @@ def diffusion_len(E0, Ee, r):
     '''
     E0_max = 1e9 #maximum energy electron that is produced by the halo (GeV)
 
-    result = quad(diffusion_integrand, Ee, min(E0, E0_max), r)[0]
+    result = quad(diffusion_integrand, Ee, min(E0, E0_max), args = (r,))[0]
+
+    # BELOW ARE DIFFERENT TYPES OF EFFOR CHECKING
 
     if result < 0:
-        print(f"diffu_len < 0: E0 = {E0}, Ee = {Ee}, r = {r}")
+        print(f"diffu_len < 0: result={result:.3e}, E0={E0}, Ee={Ee}, r={r:.3e}")
+
+    if result < -1e-10:
+        print(f"diffu_len significantly negative: {result}, E0={E0}, Ee={Ee}, r={r}")
+
+    # if result < 0:
+    #     # THIS IS JUST TO CHECK IF THERE IS NUMERICAL ISSUES
+    #     if abs(result) < 1e-2:
+    #         result  = quad(diffusion_integrand, Ee, Ee, r)[0]
+    #     else: 
+    #         print(f"diffu_len < 0: E0 = {E0}, Ee = {Ee}, r = {r}")
 
     return np.sqrt(4*result)
 
