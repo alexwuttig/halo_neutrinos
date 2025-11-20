@@ -35,5 +35,8 @@ class Params:
         # integration resolution
         self.n_points = 8
 
+        # test parameters
+        self.approximate_E0 = True
+
 # Create a single instance of Params
 params = Params()
