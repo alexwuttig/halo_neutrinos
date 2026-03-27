@@ -1,10 +1,14 @@
 # Imports
 import numpy as np
 
-from constants_module import alpha, c, hbar_GeV, me, k, h
+from halo_neutrinos.conv_and_const_module import *
+
+''' Approximate result from arXiv:2010.13825. '''
 
 def rest_sig_T():
-    
+    '''
+    Thompson cross section. 
+    '''
     r0 = 2.82e-13 # cm
     sig = (8/3)*np.pi*(r0**2)
 
@@ -13,19 +17,20 @@ def rest_sig_T():
 def b_sync(Ee):
     ''' 
     Energy losses due to synchrotron radiation.
+    Equation from: Marco Cirelli et al JCAP10(2012)E01
 
     - perams - 
     Ee: electron energy (GeV)
 
     - returns - 
-    energy loss due to synchrotron radiation
+    energy loss rate(b) due to synchrotron radiation
     '''
     sig_T = rest_sig_T() # cm^2
     B = 3e-6 # Gauss
 
-    u_B = 0.22*(1e-9) # eV/cm
+    # Galactic background magnetic field (Hooper: arXiv:2312.10232)
+    u_B = 0.22*(1e-9) # eV/cm 
 
-    #u_B = B**2 / (8 * np.pi)  # energy density of magnetic field in Gauss^2
     b_syn = (4/3) * sig_T * c * u_B * (Ee / me)**2
     
     return b_syn
@@ -33,7 +38,10 @@ def b_sync(Ee):
 def Si(Ee, Ti):
     ''' 
     Defines the suppression factor in the KN regime. 
-    Approximate result from arXiv:2010.13825. 
+    Result here from arXiv:1702.08436. 
+
+    Ee : electron energy [GeV]
+    Ti : radiation temperature [K]
     '''
     # boltzman constant in GeV
     k_GeV = 8.617*10**(-14)
@@ -42,9 +50,12 @@ def Si(Ee, Ti):
 
     return Ai/(Ai + (Ee/me)**2)
 
+
 def b_ics_i(Ee, ui, T):
     '''
-    Inverse comton energy losses.
+    Inverse comtpon energy losses.
+    Equation from: Marco Cirelli et al JCAP10(2012)E01
+    OR https://arxiv.org/pdf/1702.08436
 
     - perams - 
     Ee: Electron energy
@@ -57,14 +68,11 @@ def b_ics_i(Ee, ui, T):
 
     sig_T = rest_sig_T() # cm^2
 
-    top = 4*sig_T*ui*Si(Ee, T) * c # --> Likely right but I am not sure
-    bot = 3 # *(c**3) # --> USURE ABOUT THIS, couldn't find it in other sources
-
-    return (top/bot)*(Ee/me)**2
+    return (4/3)*sig_T*ui*Si(Ee, T)
 
 def b_tot(Ee):
     ''' 
-    Combines all ICS component losses:
+    Combines all ICS component losses (Hooper: arXiv:2312.10232):
         CMB: u = 0.26 eV/cm^3, T = 2.75 K
         IR: u = 0.60 eV/cm^3, T = 20 K
         Starlight: u = 0.60 eV/cm^3, T = 5000 K
@@ -94,4 +102,3 @@ def b_tot(Ee):
     b_tot = b_ics + b_syn
 
     return b_tot
-    

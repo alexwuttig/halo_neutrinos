@@ -219,7 +219,7 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 
-from constants_module import me
+from halo_neutrinos.conv_and_const_module import me
 import b_loss as b
 
 class E0Calculator:
@@ -232,8 +232,7 @@ class E0Calculator:
         """
         Initialize the E0 calculator by building the interpolation spline.
         
-        Parameters:
-        -----------
+        - parameters - 
         Emin : float
             Minimum energy for spline (GeV)
         Emax : float
@@ -258,15 +257,13 @@ class E0Calculator:
         """
         Computes the antiderivative of 1/btot at a given energy.
         
-        Parameters:
-        -----------
+        - parameters - 
         Ex : float
             Energy to evaluate at (GeV)
         Emin : float, optional
             Minimum energy for integration (GeV)
         
-        Returns:
-        --------
+        - returns - 
         float : Antiderivative value
         """
         if Emin is None:
@@ -287,28 +284,23 @@ class E0Calculator:
                 return 0
             return 1 / b_val
         
-        try:
-            result, error = quad(integrand_B, Emin, Ex, points=E_test, 
-                                epsabs=1e-12, epsrel=1e-10, limit=1000)
-            
-            if np.isnan(result) or np.isinf(result):
-                if self.verbose:
-                    print(f"ERROR: B_anti returned {result} for Ex={Ex}")
-                return 0
-            
-            return result
-        except Exception as e:
+        result, error = quad(integrand_B, Emin, Ex, points=E_test, 
+                            epsabs=1e-12, epsrel=1e-10, limit=1000)
+        
+        if np.isnan(result) or np.isinf(result):
             if self.verbose:
-                print(f"ERROR in B_anti integration: {e}, Ex={Ex}")
+                print(f"ERROR: B_anti returned {result} for Ex={Ex}")
             return 0
+        
+        return result
+
     
     def _build_spline(self):
         """
         Build the inverse spline for E0 calculation.
         Maps B_anti(E) -> E
         
-        Returns:
-        --------
+        - returns - 
         scipy.interpolate.interp1d : Interpolation function
         """
         Es = np.logspace(np.log10(self.Emin), np.log10(self.Emax), self.n_points)
@@ -343,21 +335,20 @@ class E0Calculator:
     
     def get_E0(self, Ee, tau, approximate=True):
         """
-        Computes the initial electron energy as a function of final
-        electron energy and time difference.
-        
-        Parameters:
-        -----------
-        Ee : float
-            Final electron energy (GeV)
-        tau : float
-            Time difference tobs - tinj (seconds)
-        approximate : bool
-            Whether to use approximations for edge cases
-        
-        Returns:
-        --------
-        float : Initial energy E0 (GeV)
+        Computes the inital photon energy as a function of final
+        photon energy and time difference between observation and 
+        injection(tstar). Utilizes a inverse function spline to find
+        the E0 that solves the necessary equation for a given Ee and
+        tau.
+
+        - params -
+        Ee: final photon energy
+        tau: tobs - tinj (Defined in the hooper paper)
+
+        - returns - 
+        value of E0 at given Ee and tau
+        maximum value of Ee for wich the function is defined, above that 
+        there isn't any well defined values
         """
         E0_max = 1e9  # Maximum energy electron produced by halo (GeV)
         
@@ -373,13 +364,8 @@ class E0Calculator:
             return E0_max
         
         # Calculate B_anti(Ee) + tau
-        try:
-            B_Ee = self.B_anti(Ee)
-        except Exception as e:
-            if self.verbose:
-                print(f"ERROR in B_anti(Ee): {e}, Ee={Ee}")
-            return E0_max
-        
+
+        B_Ee = self.B_anti(Ee)
         value = B_Ee + tau
         
         if np.isnan(value) or np.isinf(value):
@@ -407,7 +393,7 @@ class E0Calculator:
                 E0_result = Ee * 1.01
             elif E0_result > E0_max:
                 if self.verbose:
-                    print(f"WARNING: E0 ({E0_result:.3e}) > E0_max, capping at {E0_max}")
+                    print(f"E0 ({E0_result:.3e}) > E0_max, capping at {E0_max}")
                 E0_result = E0_max
         
         return E0_result

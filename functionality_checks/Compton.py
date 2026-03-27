@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 
-from constants_module import alpha, c, hbar_GeV, me, k, h
+from halo_neutrinos.conv_and_const_module import alpha, c, hbar_GeV, me, k, h
 import Lorentz as lz
 import PlotHelp as ph
 

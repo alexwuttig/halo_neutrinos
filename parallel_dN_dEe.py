@@ -7,20 +7,9 @@ from scipy.interpolate import interp1d
 # for parrallelism
 from multiprocessing import Pool
 
-from constants_module import c, hbar_GeV, me, k, h
+from halo_neutrinos.conv_and_const_module import c, hbar_GeV, me, k, h
 import b_loss as b
-
-''' Import perameters from config.py '''
 from config import params
-
-''' conversions '''
-conv_pc_to_cm = 3.086e+18       # conversion factor from [pc] to [cm]
-conv_cm_to_pc = 3.24e-19        # conversion factor from [cm] to [pc]
-conv_s_yr = 3.171e-8         # conversion factor from [sec] to [yr]
-conv_yr_sec = 3.154e+7       # conversion factor from [yr] to [sec]
-conv_rad_degree = 57.2958    # conversion factor from [rad] to [deg]
-c = 2.998e+10                # speed of light, in [cm/s]
-
 from energy_loss import E0Calculator
 
 def Q_injected(Ee):
@@ -201,10 +190,6 @@ def L_mauro(t):
     tau0 = params.tau0
     return L0_unscaled/((1 + t/tau0)**2)
 
-from energy_loss import E0Calculator
-from constants_module import me
-
-# ... your other imports and functions ...
 
 def full_Ne_mauro(Ee, r, t, e0_calc, rs=params.rs):
     '''
@@ -221,8 +206,7 @@ def full_Ne_mauro(Ee, r, t, e0_calc, rs=params.rs):
     - returns - 
     value at a specified Electron energy
     '''
-    tobs = params.tobs
-    tdiff = tobs - t
+    tdiff = params.tobs - t
 
     E0 = e0_calc.get_E0(Ee, tdiff)
     if np.isnan(E0):
@@ -255,9 +239,24 @@ def dN_dEe_r(Ee, t, e0_calc):
     return result
 
 def point_flux_dN_dEe(Ee, t_age, e0_calc):
-    '''Calculates flux at a certain radius'''
+    '''
+    Calculates flux at a certain radius
+
+    - params - 
+    Ee: electron energy [GeV]
+    t_age: age of the pulsar
+    e0_calc: E0Calculator instance
+    
+    - returns - 
+    total N of the pulsar as at a given Ee
+    '''
+    # Integration limits: from injection at t=0 to observation at tobs
     t_min = 0
     t_max = t_age
+
+    if t_max <= t_min:
+        print(f"ERROR: tobs ({params.tobs}) <= 0")
+        return 0
 
     d_mono = 288  # distance of monogem in parsecs
     
@@ -296,17 +295,49 @@ def full_dN_dEe_spec_parallel(t_age, e0_calc, n_processes=None):
     return dNs, Ees
 
 def main():
+    print(f"Pulsar age: {params.t_age:.3e} s")
+    print(f"Observation time: {params.tobs:.3e} s")
+    print(f"tau0: {params.tau0:.3e} s")
+    print()
     # Create calculator once
-    print("Initializing E0 calculator...")
     e0_calc = E0Calculator(Emin=me, Emax=1e100, n_points=10000)
-    print("E0 calculator ready!")
-    
-    # Pass it to the parallel function
-    dNs, Ees = full_dN_dEe_spec_parallel(params.t_age, e0_calc, n_processes=8)
 
-    np.savetxt("electron_spectrum_data.txt", np.column_stack((Ees, dNs)), 
-               header="Ees (GeV)    dNs", fmt="%.6e")
-    print("Data saved to 'electron_spectrum_data.txt'")
+
+    n_points = 3
+    Ees = np.logspace(np.log10(0.1), np.log10(1e6), n_points)
+    dNs = []
+    for i in range(len(Ees)):
+        t_test = params.t_age/2
+        d_test = 5  # distance of monogem in parsecs
+        
+        result = full_Ne_mauro(Ees[i], d_test, t_test, e0_calc)
+
+        L0 = (1 + params.t_age/params.tau0)
+        Edot = params.Edot 
+        SCALING = L0 * Edot
+
+        print(f"result is: {result}")
+        print(f"scaling is: {SCALING}")
+        
+
+        dNs.append(result*SCALING)
+
+
+    # SOMETHING TO DO!!!
+
+    # GET TO THE POINT WHERE NONE OF THE NUMBERS ARE A SURPRISE TO ME
+    # FLUX IS AROUND 10^(-6) for 5 PARSECS AWAY FOR A GIVEN TIME FOR NO ENERGY LOSSES
+    # AT 1 TeV electron
+
+    print(Ees)
+    print(dNs)
+
+    # # Pass it to the parallel function
+    # dNs, Ees = full_dN_dEe_spec_parallel(params.t_age, e0_calc, n_processes=8)
+
+    # np.savetxt("electron_spectrum_data.txt", np.column_stack((Ees, dNs)), 
+    #            header="Ees (GeV)    dNs", fmt="%.6e")
+    # print("Data saved to 'electron_spectrum_data.txt'")
 
 if __name__ == "__main__":
     main()

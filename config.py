@@ -7,6 +7,14 @@ conv_rad_degree = 57.2958    # conversion factor from [rad] to [deg]
 c = 2.998e+10                # speed of light, in [cm/s]
 
 
+'''
+HAVE A TABLE OF ALL OF THE VALUES THAT I'M USING FOR NEXT TIME WE MEET
+- make note of which things come from which refences
+- not assumptions vs direct measurements
+
+'''
+
+
 class Params:
     """
     Holds all tunable parameters for the halo model.
@@ -17,18 +25,18 @@ class Params:
         self.Ecut = 1e6           # electron cutoff energy (GeV)
 
         # diffusion parameters
-        self.rh = 30*conv_pc_cm       # transition radius [pc]
-        self.D0 = 1e26            # cm^2/s (inner zone)
-        self.Dism = 4e28          # cm^2/s (outer zone)
-        self.del_exponent = 1/3   # spectral index of diffusion coefficient
+        self.rh = 30*conv_pc_cm       # transition radius [pc] - Hooper(arXiv:2312.10232v1)
+        self.D0 = 1e26            # cm^2/s (inner zone) - From Hooper(arXiv:2312.10232v1)
+        self.Dism = 4e28          # cm^2/s (outer zone) - From Hooper(arXiv:2312.10232v1)
+        self.del_exponent = 1/3   # spectral index of diffusion coefficient - From Hooper(arXiv:2312.10232v1)
 
-        # luminosity parameters
-        self.tau0 = 12 * conv_yr_sec
+        # luminosity parameters - for Momogem, generally well known(cite)
+        self.tau0 = 12e3 * conv_yr_sec
         self.Edot = 3.8e34        # erg/s (for Monogem)
         self.tobs = 110e3 * conv_yr_sec  # observed age of pulsar
 
-        # location, age, and distance perameters
-        self.rs = 1             # alactic location of source
+        # location, age, and distance perameters - For Monogem(cite)
+        self.rs = 1             # galactic location of source
         self.d = 288            # distance in parsecs
         self.t_age = self.tobs + (self.d * conv_pc_cm)/c # actual age of pulsar(accounting for light travel time)
 
