@@ -29,6 +29,12 @@ def Q_injected(Ee):
 
     return Ee**(-alpha) * np.exp(-Ee / Ecut)
 
+
+def L_mauro(t):
+    L0_unscaled = 1
+    tau0 = params.tau0
+    return L0_unscaled/((1 + t/tau0)**2)
+
 def diffusion_hoop(Ee, r_cm):
     ''' 
     Diffusion coefficient
@@ -184,12 +190,6 @@ def H(r, Ee, E0, rs = params.rs):
         result = term0*term01*term02*(term1 + term2)
 
     return result
-
-def L_mauro(t):
-    L0_unscaled = 1
-    tau0 = params.tau0
-    return L0_unscaled/((1 + t/tau0)**2)
-
 
 def full_Ne_mauro(Ee, r, t, e0_calc, rs=params.rs):
     '''

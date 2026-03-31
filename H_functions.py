@@ -10,19 +10,23 @@ from config import params
 
 from halo_neutrinos.conv_and_const_module import *
 
-
-def H_one_zone(r, Ee, E0, diffu_len, rs=params.rs):
+def H_one_zone(r, Ee, E0, rs=params.rs):
     '''
-    One zone model
+    One zone model found in various papers. 
+    Pulling from: https://doi.org/10.1093/mnras/stz268
+
     - params -
     r: position in PARSECS
+    Ee: current electron energy
+    E0: injected electron energy
+    rs: position of the source
     '''
     del_r_cm = np.abs(r - rs) * conv_pc_to_cm  # Convert to cm
     
     dl_cm = diffusion_len(Ee, E0, del_r_cm)  # Returns cm
     
     if dl_cm == 0:
-        print(f"ERROR: diffusion length is zero!")
+        print(f"ERROR: diffusion length is zero! r={r}, Ee={Ee}, E0={E0}, dl={dl_cm} ")
         return 0
     
     term1 = 1/(np.pi**(3/2) * dl_cm**3)
@@ -36,41 +40,45 @@ def H_one_zone(r, Ee, E0, diffu_len, rs=params.rs):
     
     return result
 
-
-
-def H(r, Ee, E0, rs = params.rs):
+def H_mauro(r, Ee, E0, rs = params.rs, rh = params.rh):
     '''
-    Defined in Di Mauro et. al. paper
-    
+    H funciton as defined in Di Mauro et. al. paper
+    Link: https://doi.org/10.1103/PhysRevD.100.123015
+
     - params - 
-    r: position in galactic coordinates
+    r: position in parsecs
+    Ee: current electron energy
+    E0: injected electron energy
+    rs: position of the source
+
+
+    Note: In the H function there is the use of r. Unsure if this 
+    is supposed to be del_r or just r. 
     '''
 
     # rs is the source position
-    del_r = np.abs(r - rs)
+    del_r = np.abs(r - rs) * conv_pc_to_cm
 
     # diffusion lengths
     l_0 = diffusion_len(Ee, E0,  0) # setting r to 0 pc so it uses D0
-    l_ism = diffusion_len(Ee, E0, 100) # setting r to 100 pc so it uses Dism
+    l_ism = diffusion_len(Ee, E0, 100 * conv_pc_to_cm) # setting r to 100 pc so it uses Dism
 
     # Defining perameters in paper
     D0 = 1e26 # cm^2 / s
     Dism = 4e28 # cm^2 / s
-
-    # rh: radius when the diffusion model 'switches zones, set as 30 pc in hooper
-    rh = 30 # parsecs
 
     xi = np.sqrt(D0/Dism)
 
     # epsilon definition
     ep = rh/l_0
     erf = sp.special.erf(ep)
+    erf2 = sp.special.erf(ep*2)
     erfc = sp.special.erfc(ep)
 
     # Implementing the function
     bot00 = (np.pi*(l_0**2))**(3/2)
     bot01 = 2*(xi**2)*erf
-    bot02 = xi*(xi-1)*erf
+    bot02 = xi*(xi-1)*erf2
     bot03 = 2*erfc
     term0 = (xi*(xi+1)) / (bot00)*(bot01 - bot02 + bot03) 
 
@@ -82,7 +90,7 @@ def H(r, Ee, E0, rs = params.rs):
         term23 = np.exp( - ((del_r-2*rh)**2) / (l_0**2) )
         term2 = term21*term22*term23
 
-        result = term0*(term1+term2)
+        result = term0*(term1 + term2)
 
     else:
         term01 = (2*xi)/(xi + 1)
@@ -90,71 +98,12 @@ def H(r, Ee, E0, rs = params.rs):
         term1 = rh/r
         term2 = xi*(1-rh/r)
 
-        result = term0*term01*term02*(term1 + term2)
-
-    return result
-
-def H_mauro(r, Ee, E0, rs = 0):
-    '''
-    Defined in Di Mauro et. al. paper
-    
-    - perams - 
-    r: position in galactic coordinates
-    '''
-
-    # rs is the source position
-    del_r = r - rs
-
-    # diffusion lengths
-    #l_0 = diffusion_len(Ee, E0, 0)*conv_cm_pc # setting r to 0 pc so it uses D0
-    #l_ism = diffusion_len(Ee, E0, 100)*conv_cm_pc # setting r to 100 pc so it uses Dism
-    l_0 = 50
-    l_ism = 50
-
-    # Defining perameters in paper
-    D0 = 1e26 # cm^2 / s
-    Dism = 4e28 # cm^2 / s
-
-    # rh: radius when the diffusion model 'switches zones, set as 30 pc in hooper
-    rh = 30 # parsecs
-
-    # xi = np.sqrt(D0/Dism)
-    xi = np.sqrt(1/100)
-
-    # epsilon definition
-    ep = rh/l_0
-    erf = sp.special.erf(ep)
-    erfc = sp.special.erfc(ep)
-
-    # Implementing the function
-    bot00 = (np.pi*(l_0**2))**(3/2)
-    bot01 = 2*(xi**2)*erf
-    bot02 = xi*(xi-1)*erf
-    bot03 = 2*erfc
-    term0 = (xi*(xi+1)) / (bot00)*(bot01 - bot02 + bot03) 
-
-    # r dependence
-    if r < rh:
-        term1 = np.exp( - (del_r**2) / (l_0**2) )
-        term21 = (xi-1)/(xi + 1)
-        term22 = (2*rh)/(r) - 1
-        term23 = np.exp( - ((del_r-2*rh)**2) / (l_0**2) )
-        term2 = term21*term22*term23
-
-        result = term0*(term1+term2)
-
-    else:
-        term01 = (2*xi)/(xi + 1)
-        term02 = np.exp( - (((del_r - rh)/l_ism) + rh/l_0 )**2 )
-        term1 = rh/r
-        term2 = xi*(1-rh/r)
-
-        result = term0*term01*term02*(term1 + term2)
+        result = term0 * term01 * term02 * (term1 + term2)
 
     return result
 
 
-
+# Dont use this equation but it exists
 def H_schroer(r, E, t):
     """
     Compute H(r,E,t) by numerically integrating over psi from 0 to infinity.

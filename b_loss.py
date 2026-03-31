@@ -31,7 +31,7 @@ def b_sync(Ee):
     # Galactic background magnetic field (Hooper: arXiv:2312.10232)
     u_B = 0.22*(1e-9) # eV/cm 
 
-    b_syn = (4/3) * sig_T * c * u_B * (Ee / me)**2
+    b_syn = (4/3) * sig_T * u_B * (Ee / me)**2 * (c) # For proper units (with me = m_e * c^2)
     
     return b_syn
 
@@ -68,7 +68,7 @@ def b_ics_i(Ee, ui, T):
 
     sig_T = rest_sig_T() # cm^2
 
-    return (4/3)*sig_T*ui*Si(Ee, T)
+    return (4/3)*sig_T*ui*Si(Ee, T) * (c) # For proper units (with me = m_e * c^2)
 
 def b_tot(Ee):
     ''' 
