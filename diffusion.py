@@ -1,16 +1,38 @@
 # Imports
 import numpy as np
-import scipy as sp
 # for integration and interpolation
 from scipy.integrate import quad
-from scipy.interpolate import interp1d
-# for parrallelism
-from multiprocessing import Pool
 
 ''' import file functionality '''
-from halo_neutrinos.conv_and_const_module import *
+from conv_and_const_module import *
 from config import params
 import b_loss as b
+
+def L_mauro(t):
+    tau0 = params.tau0
+    return params.eta/((1 + t/tau0)**2)
+
+
+def L0 ():
+    '''
+    Findining the normalization factor L0 from the spin down rate
+    over time. 
+
+    '''
+    # finding the spindown power based on the age of the pulsar(T)
+    d_cm = conv_pc_to_cm * params.d
+    T = params.tobs + d_cm/c
+    tau0 = params.tau0
+    Edot = params.Edot
+    W0 = tau0 * Edot * ( 1 + T/tau0 )**2
+
+    # Solving for L0
+    Etot = W0 * params.eta
+
+    L0_val = Etot / quad(L_mauro,0,T)
+
+    return L0_val
+
 
 def Q_injected(Ee):
     ''' 
@@ -101,3 +123,15 @@ def diffusion_len(Ee, E0, r_cm):
         return 1e10
     
     return np.sqrt(4*result)
+
+
+
+def main():
+    L0 = L0()
+    print("In main!")
+    print(f"L0 value is: {L0}")
+
+
+
+if __name__ == "__main__":
+    main()

@@ -33,6 +33,7 @@ class Params:
         # luminosity parameters - for Momogem, generally well known(cite)
         self.tau0 = 12e3 * conv_yr_sec
         self.Edot = 3.8e34        # erg/s (for Monogem)
+        self.eta = 0.25          # ratio of spindown power that goes into e-pairs - From Hooper(arXiv:2312.10232v1)
         self.tobs = 110e3 * conv_yr_sec  # observed age of pulsar
 
         # location, age, and distance perameters - For Monogem(cite)

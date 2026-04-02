@@ -103,9 +103,11 @@ def H_mauro(r, Ee, E0, rs = params.rs, rh = params.rh):
     return result
 
 
-# Dont use this equation but it exists
+# Dont use this equation as is, but it exists as a possible improvement over mauro
 def H_schroer(r, E, t):
     """
+    Link to paper: https://journals.aps.org/prd/pdf/10.1103/PhysRevD.107.123020 
+
     Compute H(r,E,t) by numerically integrating over psi from 0 to infinity.
     Uses piecewise form depending on r < r0 or r >= r0.
     """
