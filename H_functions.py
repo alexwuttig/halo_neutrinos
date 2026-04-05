@@ -8,7 +8,7 @@ from scipy.integrate import quad
 from diffusion import diffusion_len
 from config import params
 
-from halo_neutrinos.conv_and_const_module import *
+from conv_and_const_module import *
 
 def H_one_zone(r, Ee, E0, rs=params.rs):
     '''

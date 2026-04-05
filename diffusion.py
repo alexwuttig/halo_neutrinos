@@ -7,41 +7,67 @@ from scipy.integrate import quad
 from conv_and_const_module import *
 from config import params
 import b_loss as b
+import energy_loss as E_loss
 
 def L_mauro(t):
-    tau0 = params.tau0
-    return params.eta/((1 + t/tau0)**2)
+    '''
+    Luminosity function from: Mauro et al
+    https://iopscience.iop.org/article/10.3847/1538-4357/ad738e/pdf
+    '''
 
+    L0_val = L0()
+    tau0 = params.tau0
+    return (params.eta*L0_val)/((1 + t/tau0)**2)
 
 def L0 ():
     '''
     Findining the normalization factor L0 from the spin down rate
     over time. 
 
+    - returns - 
+    L0 normalization factor in GeV
     '''
     # finding the spindown power based on the age of the pulsar(T)
     d_cm = conv_pc_to_cm * params.d
     T = params.tobs + d_cm/c
     tau0 = params.tau0
     Edot = params.Edot
+
+    # Spin down power
     W0 = tau0 * Edot * ( 1 + T/tau0 )**2
 
     # Solving for L0
     Etot = W0 * params.eta
 
-    L0_val = Etot / quad(L_mauro,0,T)
+    def L_mauro_unscaled(t):
+        tau0 = params.tau0
+        return params.eta/((1 + t/tau0)**2)
 
-    return L0_val
+    integrand, _ = quad(L_mauro_unscaled,0,T)
+
+    L0_val = Etot / integrand
+
+    return L0_val * conv_erg_to_GeV
 
 
-def Q_injected(Ee):
+def L_xaiping (t):
+    '''
+    Luminosity function from: Xaiping et al
+    https://academic.oup.com/mnras/article/484/3/3491/5301417#update310119_update300119_update300119_equ15 
+    '''
+    Lt_val = params.eta * params.Edot * ( (1 + params.t_age/params.tau0)**2/((1 + t/params.tau0)**2) )
+    return  Lt_val * conv_erg_to_GeV
+
+def Q_injected(t, Ee):
     ''' 
     Describes the source term for the transport equation describing the 
     electron motion throughout the TeV halo. 
+
+    Specific function descriped in Hooper et al and Mauro et al. 
     
     - params - 
+    t: time of injection
     Ee: electron energy (GeV)
-    Qnorm: normalization factor for the power law
 
     - returns -
     injected electron power law spectrum
@@ -49,13 +75,86 @@ def Q_injected(Ee):
     alpha = params.alpha
     Ecut = params.Ecut 
 
-    return Ee**(-alpha) * np.exp(-Ee / Ecut)
+    return L_mauro(t) * Ee**(-alpha) * np.exp(-Ee / Ecut)
+
+
+
+
+
+''' - - - - - - - - - - - - - - - - - - - - - - [ Checkpoint ] - - - - - - - - - - - - - - - - - - - - - - - - - '''
+
+
+def diffusion_len_approx(Ee, tau, r=0):
+    '''
+    Analytic approximation to the diffusion length using:
+        b(E)  = b0 * E^2  (quadratic energy loss)
+        D(E)  = D0 * E^(1/3)  (inner zone, r < rh)
+    
+    Result is in cm. Multiply by conv_cm_pc to get parsecs.
+
+    - params -
+    Ee:  observed electron energy (GeV)
+    tau: tobs - tinj (s)
+    r:   distance from pulsar (pc) — only affects which D0 is used
+    '''
+    b0 = 1.4e-16   # GeV^-1 s^-1
+    rh = 30        # pc
+
+    if r < rh:
+        D0 = 1e26  # cm^2/s
+    else:
+        D0 = 4e28  # cm^2/s
+
+    # Analytic E0
+    B_ee = (1/me - 1/Ee) / b0
+    inv_E0 = 1/me - b0 * (B_ee + tau)
+    
+    if inv_E0 <= 0:
+        return 0.0  # electron couldn't have reached Ee in time tau
+
+    E0 = 1.0 / inv_E0
+
+    # Analytic diffusion length integral
+    integral = (3 * D0) / (2 * b0) * (Ee**(-2/3) - E0**(-2/3))
+
+    if integral <= 0:
+        return 0.0
+
+    return np.sqrt(4 * integral)
+
+
+# ── Diffusion coefficient ──────────────────────────────────────────────────────
+def D(Ee, r):
+    """Two-zone diffusion coefficient(from Hooper)."""
+    rh  = 30    # pc
+    D0  = 1e26  # cm^2/s  (inner)
+    Dism = 4e28 # cm^2/s  (outer)
+    delta = 1/3 
+    coeff = D0 if r < rh else Dism
+    return coeff * (Ee / 1.0)**delta
+
+# ── Diffusion length ───────────────────────────────────────────────────────────
+def diffusion_len(Ee, tau, r=0):
+    E0 = E_loss.E0_val(Ee, tau)
+
+    # Checks if E0 value is nonphysical, sets to 0 if so
+    if E0 <= Ee:
+        return 0.0
+
+    pts = np.logspace(np.log10(Ee), np.log10(E0), 300)
+    result, _ = quad((lambda E: D(E, r) / b.b_tot(E)) , Ee, E0,
+                     points=pts, epsabs=1e-12, epsrel=1e-10, limit=500)
+
+    return np.sqrt(4 * result) if result > 0 else 0.0
+
+
+''' - - - - - - - - - - - - - - - - - - - - - - [ Old code below ] - - - - - - - - - - - - - - - - - - - - - - - - - '''
 
 def diffusion_hoop(Ee, r_cm):
     ''' 
     Diffusion coefficient
     - params -
-    r_cm: distance from center of pulsar halo IN CM
+    r_cm: distance from center of pulsar halo (IN CM)
     '''
     rh_cm = params.rh  # Should already be in cm from params
     
@@ -127,11 +226,11 @@ def diffusion_len(Ee, E0, r_cm):
 
 
 def main():
-    L0 = L0()
-    print("In main!")
-    print(f"L0 value is: {L0}")
+    L0_result = L_mauro(0)
+    print(f"L(t = 0) value for Mauro is: {L0_result}")
 
-
+    L0_result1 = L_xaiping(0)
+    print(f"L(t = 0) value for Xaiping is: {L0_result1}")
 
 if __name__ == "__main__":
     main()

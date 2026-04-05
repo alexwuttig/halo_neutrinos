@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 # for parrallelism
 from multiprocessing import Pool
 
-from halo_neutrinos.conv_and_const_module import c, hbar_GeV, me, k, h
+from conv_and_const_module import c, hbar_GeV, me, k, h
 import b_loss as b
 from config import params
 from energy_loss import E0Calculator

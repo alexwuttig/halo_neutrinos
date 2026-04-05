@@ -1,7 +1,7 @@
 # Imports
 import numpy as np
 
-from halo_neutrinos.conv_and_const_module import *
+from conv_and_const_module import *
 
 ''' Approximate result from arXiv:2010.13825. '''
 
