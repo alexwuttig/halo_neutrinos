@@ -77,14 +77,7 @@ def Q_injected(t, Ee):
 
     return L_mauro(t) * Ee**(-alpha) * np.exp(-Ee / Ecut)
 
-
-
-
-
-''' - - - - - - - - - - - - - - - - - - - - - - [ Checkpoint ] - - - - - - - - - - - - - - - - - - - - - - - - - '''
-
-
-def diffusion_len_approx(Ee, tau, r=0):
+def diffusion_len_approx(Ee, E0, r):
     '''
     Analytic approximation to the diffusion length using:
         b(E)  = b0 * E^2  (quadratic energy loss)
@@ -98,44 +91,34 @@ def diffusion_len_approx(Ee, tau, r=0):
     r:   distance from pulsar (pc) — only affects which D0 is used
     '''
     b0 = 1.4e-16   # GeV^-1 s^-1
-    rh = 30        # pc
 
-    if r < rh:
-        D0 = 1e26  # cm^2/s
+    if r < params.rh:
+        D = params.D0
     else:
-        D0 = 4e28  # cm^2/s
+        D = params.Dism
 
-    # Analytic E0
-    B_ee = (1/me - 1/Ee) / b0
-    inv_E0 = 1/me - b0 * (B_ee + tau)
-    
-    if inv_E0 <= 0:
-        return 0.0  # electron couldn't have reached Ee in time tau
+    delta = params.del_exponent
 
-    E0 = 1.0 / inv_E0
-
-    # Analytic diffusion length integral
-    integral = (3 * D0) / (2 * b0) * (Ee**(-2/3) - E0**(-2/3))
-
-    if integral <= 0:
-        return 0.0
+    integral = (D/b0) * (1/(delta - 1)) * (E0**(delta - 1) - Ee**(delta  -1))
 
     return np.sqrt(4 * integral)
-
 
 # ── Diffusion coefficient ──────────────────────────────────────────────────────
 def D(Ee, r):
     """Two-zone diffusion coefficient(from Hooper)."""
-    rh  = 30    # pc
-    D0  = 1e26  # cm^2/s  (inner)
-    Dism = 4e28 # cm^2/s  (outer)
-    delta = 1/3 
+    rh  = params.rh
+    D0  = params.D0 # cm^2/s  (inner)
+    Dism = params.Dism # cm^2/s  (outer)
+    delta = params.del_exponent
     coeff = D0 if r < rh else Dism
     return coeff * (Ee / 1.0)**delta
 
 # ── Diffusion length ───────────────────────────────────────────────────────────
-def diffusion_len(Ee, tau, r=0):
-    E0 = E_loss.E0_val(Ee, tau)
+def diffusion_len(Ee, E0, r):
+    ''' 
+    Function for diffusion length. General formula given a diffusion equation 
+    D and an energy loss function b.
+    '''
 
     # Checks if E0 value is nonphysical, sets to 0 if so
     if E0 <= Ee:
@@ -145,83 +128,87 @@ def diffusion_len(Ee, tau, r=0):
     result, _ = quad((lambda E: D(E, r) / b.b_tot(E)) , Ee, E0,
                      points=pts, epsabs=1e-12, epsrel=1e-10, limit=500)
 
-    return np.sqrt(4 * result) if result > 0 else 0.0
-
-
-''' - - - - - - - - - - - - - - - - - - - - - - [ Old code below ] - - - - - - - - - - - - - - - - - - - - - - - - - '''
-
-def diffusion_hoop(Ee, r_cm):
-    ''' 
-    Diffusion coefficient
-    - params -
-    r_cm: distance from center of pulsar halo (IN CM)
-    '''
-    rh_cm = params.rh  # Should already be in cm from params
-    
-    if r_cm < 0:
-        print(f"ERROR: negative radius {r_cm}")
-        return 0
-    
-    if r_cm < rh_cm: 
-        D0 = 1e26
-        del_exponent = params.del_exponent 
-        return D0*(Ee)**del_exponent
+    if np.sqrt(4 * result) > 0:
+        diff_len = np.sqrt(4 * result)
     else:
-        Dism = 4e28
-        del_ism = 1/3
-        return Dism*(Ee)**del_ism
+        print(f"diffusion length set to 0")
+        diff_len = 0
 
-def diffusion_len(Ee, E0, r_cm):
-    '''
-    Diffusion model from the hooper paper, uses a two zone diffusion model
-    with a factor rh that describes where the model changes from one zone
-    to the next. Spherical diffusion is required by the results of the 
-    Luque et. al. paper. 
+    return diff_len
 
-    Diffusion length λ(Ee, E0, r):
-        λ^2 = 4 ∫_{Ee}^{E0} [ D(E) / b(E) ] dE
 
-    - params - 
-    Ee: final electron energy (GeV)
-    E0: intial electron energy (GeV)
+# def diffusion_hoop(Ee, r_cm):
+#     ''' 
+#     Diffusion coefficient
+#     - params -
+#     r_cm: distance from center of pulsar halo (IN CM)
+#     '''
+#     rh_cm = params.rh  # Should already be in cm from params
+    
+#     if r_cm < 0:
+#         print(f"ERROR: negative radius {r_cm}")
+#         return 0
+    
+#     if r_cm < rh_cm: 
+#         D0 = 1e26
+#         del_exponent = params.del_exponent 
+#         return D0*(Ee)**del_exponent
+#     else:
+#         Dism = 4e28
+#         del_ism = 1/3
+#         return Dism*(Ee)**del_ism
 
-    - returns - 
-    diffusion length (cm)
-    '''
-    E0_max = 1e9
-    E_upper = min(E0, E0_max)
+# def diffusion_len(Ee, E0, r_cm):
+#     '''
+#     Diffusion model from the hooper paper, uses a two zone diffusion model
+#     with a factor rh that describes where the model changes from one zone
+#     to the next. Spherical diffusion is required by the results of the 
+#     Luque et. al. paper. 
 
-    if E_upper <= Ee:
-        print(f"WARNING: E_upper ({E_upper}) <= Ee ({Ee}), returning minimum diffusion length")
-        return 1e10  # 1e10 cm = ~0.3 pc, reasonable minimum
+#     Diffusion length λ(Ee, E0, r):
+#         λ^2 = 4 ∫_{Ee}^{E0} [ D(E) / b(E) ] dE
+
+#     - params - 
+#     Ee: final electron energy (GeV)
+#     E0: intial electron energy (GeV)
+
+#     - returns - 
+#     diffusion length (cm)
+#     '''
+#     E0_max = 1e9
+#     E_upper = min(E0, E0_max)
+
+#     if E_upper <= Ee:
+#         print(f"WARNING: E_upper ({E_upper}) <= Ee ({Ee}), returning minimum diffusion length")
+#         return 1e10  # 1e10 cm = ~0.3 pc, reasonable minimum
     
-    if abs(E_upper - Ee) / Ee < 1e-6:
-        print(f"WARNING: E_upper ≈ Ee, returning minimum diffusion length")
-        return 1e10
+#     if abs(E_upper - Ee) / Ee < 1e-6:
+#         print(f"WARNING: E_upper ≈ Ee, returning minimum diffusion length")
+#         return 1e10
     
-    def diffusion_integrand(E, r_cm):
-        D_val = diffusion_hoop(E, r_cm)
-        b_val = b.b_tot(E)
-        if b_val == 0 or np.isnan(b_val):
-            print(f"ERROR: b_tot({E}) = {b_val}")
-            return 0
-        return D_val / b_val
+#     def diffusion_integrand(E, r_cm):
+#         D_val = diffusion_hoop(E, r_cm)
+#         b_val = b.b_tot(E)
+#         if b_val == 0 or np.isnan(b_val):
+#             print(f"ERROR: b_tot({E}) = {b_val}")
+#             return 0
+#         return D_val / b_val
     
-    try:
-        result = quad(diffusion_integrand, Ee, E_upper, args=(r_cm,))[0]
-    except Exception as e:
-        print(f"ERROR in diffusion_len quad: {e}")
-        return 1e10
+#     try:
+#         result = quad(diffusion_integrand, Ee, E_upper, args=(r_cm,))[0]
+#     except Exception as e:
+#         print(f"ERROR in diffusion_len quad: {e}")
+#         return 1e10
     
-    if result <= 0:
-        print(f"WARNING: diffusion integral = {result} <= 0, Ee={Ee}, E0={E0}, r={r_cm/conv_pc_to_cm:.2f} pc")
-        return 1e10
+#     if result <= 0:
+#         print(f"WARNING: diffusion integral = {result} <= 0, Ee={Ee}, E0={E0}, r={r_cm/conv_pc_to_cm:.2f} pc")
+#         return 1e10
     
-    if np.isnan(result) or np.isinf(result):
-        print(f"ERROR: diffusion integral = {result}")
-        return 1e10
+#     if np.isnan(result) or np.isinf(result):
+#         print(f"ERROR: diffusion integral = {result}")
+#         return 1e10
     
-    return np.sqrt(4*result)
+#     return np.sqrt(4*result)
 
 
 

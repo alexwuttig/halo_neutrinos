@@ -34,18 +34,16 @@ class Params:
         self.tau0 = 12e3 * conv_yr_sec
         self.Edot = 3.8e34        # erg/s (for Monogem)
         self.eta = 0.25          # ratio of spindown power that goes into e-pairs - From Hooper(arXiv:2312.10232v1)
-        self.tobs = 110e3 * conv_yr_sec  # observed age of pulsar
+        self.tobs = 342e3 * conv_yr_sec  # observed age of geminga
 
         # location, age, and distance perameters - For Monogem(cite)
-        self.rs = 1             # galactic location of source
+        self.rs = 0             # galactic location of source
         self.d = 288            # distance in parsecs
         self.t_age = self.tobs + (self.d * conv_pc_cm)/c # actual age of pulsar(accounting for light travel time)
 
         # integration resolution
         self.n_points = 8
 
-        # test parameters
-        self.approximate_E0 = True
 
 # Create a single instance of Params
 params = Params()

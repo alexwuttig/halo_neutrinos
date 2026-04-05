@@ -3,195 +3,19 @@ import numpy as np
 import scipy as sp
 # for integration and interpolation
 from scipy.integrate import quad
-from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
 # for parrallelism
 from multiprocessing import Pool
 
-from conv_and_const_module import c, hbar_GeV, me, k, h
+from conv_and_const_module import *
 import b_loss as b
 from config import params
-from energy_loss import E0Calculator
-
-def Q_injected(Ee):
-    ''' 
-    Describes the source term for the transport equation describing the 
-    electron motion throughout the TeV halo. 
-    
-    - params - 
-    Ee: electron energy (GeV)
-    Qnorm: normalization factor for the power law
-
-    - returns -
-    injected electron power law spectrum
-    '''
-    alpha = params.alpha
-    Ecut = params.Ecut 
-
-    return Ee**(-alpha) * np.exp(-Ee / Ecut)
+import energy_loss as E_loss
+import diffusion
+import H_functions as H_funcs
 
 
-def L_mauro(t):
-    L0_unscaled = 1
-    tau0 = params.tau0
-    return L0_unscaled/((1 + t/tau0)**2)
-
-def diffusion_hoop(Ee, r_cm):
-    ''' 
-    Diffusion coefficient
-    - params -
-    r_cm: distance from center of pulsar halo IN CM
-    '''
-    rh_cm = params.rh  # Should already be in cm from params
-    
-    if r_cm < 0:
-        print(f"ERROR: negative radius {r_cm}")
-        return 0
-    
-    if r_cm < rh_cm: 
-        D0 = 1e26
-        del_exponent = params.del_exponent 
-        return D0*(Ee)**del_exponent
-    else:
-        Dism = 4e28
-        del_ism = 1/3
-        return Dism*(Ee)**del_ism
-
-def diffusion_len(Ee, E0, r_cm):
-    '''
-    Diffusion model from the hooper paper, uses a two zone diffusion model
-    with a factor rh that describes where the model changes from one zone
-    to the next. Spherical diffusion is required by the results of the 
-    Luque et. al. paper. 
-
-    Diffusion length λ(Ee, E0, r):
-        λ^2 = 4 ∫_{Ee}^{E0} [ D(E) / b(E) ] dE
-
-    - params - 
-    Ee: final electron energy (GeV)
-    E0: intial electron energy (GeV)
-
-    - returns - 
-    diffusion length (cm)
-    '''
-    E0_max = 1e9
-    E_upper = min(E0, E0_max)
-
-    if E_upper <= Ee:
-        print(f"WARNING: E_upper ({E_upper}) <= Ee ({Ee}), returning minimum diffusion length")
-        return 1e10  # 1e10 cm = ~0.3 pc, reasonable minimum
-    
-    if abs(E_upper - Ee) / Ee < 1e-6:
-        print(f"WARNING: E_upper ≈ Ee, returning minimum diffusion length")
-        return 1e10
-    
-    def diffusion_integrand(E, r_cm):
-        D_val = diffusion_hoop(E, r_cm)
-        b_val = b.b_tot(E)
-        if b_val == 0 or np.isnan(b_val):
-            print(f"ERROR: b_tot({E}) = {b_val}")
-            return 0
-        return D_val / b_val
-    
-    try:
-        result = quad(diffusion_integrand, Ee, E_upper, args=(r_cm,))[0]
-    except Exception as e:
-        print(f"ERROR in diffusion_len quad: {e}")
-        return 1e10
-    
-    if result <= 0:
-        print(f"WARNING: diffusion integral = {result} <= 0, Ee={Ee}, E0={E0}, r={r_cm/conv_pc_to_cm:.2f} pc")
-        return 1e10
-    
-    if np.isnan(result) or np.isinf(result):
-        print(f"ERROR: diffusion integral = {result}")
-        return 1e10
-    
-    return np.sqrt(4*result)
-
-def H_one_zone(r, Ee, E0, rs=params.rs):
-    '''
-    One zone model
-    - params -
-    r: position in PARSECS
-    '''
-    del_r_cm = np.abs(r - rs) * conv_pc_to_cm  # Convert to cm
-    
-    dl_cm = diffusion_len(Ee, E0, del_r_cm)  # Returns cm
-    
-    if dl_cm == 0:
-        print(f"ERROR: diffusion length is zero!")
-        return 0
-    
-    term1 = 1/(np.pi**(3/2) * dl_cm**3)
-    term2 = np.exp(-(del_r_cm**2)/(dl_cm**2))
-    
-    result = term1 * term2
-    
-    if np.isnan(result) or np.isinf(result):
-        print(f"ERROR: H_one_zone = {result}, r={r}, Ee={Ee}, E0={E0}, dl={dl_cm}")
-        return 0
-    
-    return result
-
-
-
-def H(r, Ee, E0, rs = params.rs):
-    '''
-    Defined in Di Mauro et. al. paper
-    
-    - params - 
-    r: position in galactic coordinates
-    '''
-
-    # rs is the source position
-    del_r = np.abs(r - rs)
-
-    # diffusion lengths
-    l_0 = diffusion_len(Ee, E0,  0) # setting r to 0 pc so it uses D0
-    l_ism = diffusion_len(Ee, E0, 100) # setting r to 100 pc so it uses Dism
-
-    # Defining perameters in paper
-    D0 = 1e26 # cm^2 / s
-    Dism = 4e28 # cm^2 / s
-
-    # rh: radius when the diffusion model 'switches zones, set as 30 pc in hooper
-    rh = 30 # parsecs
-
-    xi = np.sqrt(D0/Dism)
-
-    # epsilon definition
-    ep = rh/l_0
-    erf = sp.special.erf(ep)
-    erfc = sp.special.erfc(ep)
-
-    # Implementing the function
-    bot00 = (np.pi*(l_0**2))**(3/2)
-    bot01 = 2*(xi**2)*erf
-    bot02 = xi*(xi-1)*erf
-    bot03 = 2*erfc
-    term0 = (xi*(xi+1)) / (bot00)*(bot01 - bot02 + bot03) 
-
-    # r dependence
-    if r < rh:
-        term1 = np.exp( - (del_r**2) / (l_0**2) )
-        term21 = (xi-1)/(xi + 1)
-        term22 = (2*rh)/(r) - 1
-        term23 = np.exp( - ((del_r-2*rh)**2) / (l_0**2) )
-        term2 = term21*term22*term23
-
-        result = term0*(term1+term2)
-
-    else:
-        term01 = (2*xi)/(xi + 1)
-        term02 = np.exp( - (((del_r - rh)/l_ism) + rh/l_0 )**2 )
-        term1 = rh/r
-        term2 = xi*(1-rh/r)
-
-        result = term0*term01*term02*(term1 + term2)
-
-    return result
-
-def full_Ne_mauro(Ee, r, t, e0_calc, rs=params.rs):
+def full_Ne_mauro(Ee, r, t, rs=params.rs):
     '''
     Combines everything from above to make a full electron spectrum 
     from the pulsar halo. 
@@ -206,11 +30,24 @@ def full_Ne_mauro(Ee, r, t, e0_calc, rs=params.rs):
     - returns - 
     value at a specified Electron energy
     '''
-    tdiff = params.tobs - t
 
-    E0 = e0_calc.get_E0(Ee, tdiff)
-    if np.isnan(E0):
-        return 0
+
+
+
+
+
+
+    ''' CHECK THIS VALUE!!!!!!!! CHECK SIGN!!!!!'''
+    tau = params.tobs - t
+
+
+
+
+
+
+
+    # get E0 for current Ee and t
+    E0 = E_loss.get_E0(Ee, tau)
 
     b0 = b.b_tot(E0)
     be = b.b_tot(Ee)
@@ -219,26 +56,27 @@ def full_Ne_mauro(Ee, r, t, e0_calc, rs=params.rs):
         return 0
 
     term_b = b0/be
-    lum = L_mauro(t)
-    term_Q = lum*Q_injected(E0)
-    H_val = H_one_zone(r, Ee, E0)
+
+    term_Q = diffusion.Q_injected(t, E0)
+
+    H_val = H_funcs.H_one_zone(r, Ee, E0)
 
     result = term_b * term_Q * H_val
     return result
 
-def dN_dEe_r(Ee, t, e0_calc):
+def dN_dEe_r(Ee, t):
     '''Calculates the differential number density at a given time'''
     r_min = 0
-    r_max = 100
+    r_max = 30
     
     def dN_integrand(r, args):
-        Ee, t, rs, calc = args
-        return full_Ne_mauro(Ee, r, t, calc, rs) * 4 * np.pi * r**2
+        Ee, t = args
+        return full_Ne_mauro(Ee, r, t) * 4 * np.pi * r**2
 
-    result, error = quad(dN_integrand, r_min, r_max, args=[Ee, t, 0, e0_calc], limit=50)
+    result, error = quad(dN_integrand, r_min, r_max, args=[Ee, t], limit=50)
     return result
 
-def point_flux_dN_dEe(Ee, t_age, e0_calc):
+def point_flux_dN_dEe(Ee):
     '''
     Calculates flux at a certain radius
 
@@ -252,25 +90,19 @@ def point_flux_dN_dEe(Ee, t_age, e0_calc):
     '''
     # Integration limits: from injection at t=0 to observation at tobs
     t_min = 0
-    t_max = t_age
+    t_max = params.t_age
 
     if t_max <= t_min:
         print(f"ERROR: tobs ({params.tobs}) <= 0")
         return 0
-
-    d_mono = 288  # distance of monogem in parsecs
     
     def integrand(t, args):
-        Ee, d, rs, calc = args
-        return full_Ne_mauro(Ee, d, t, calc, rs)
+        Ee, d = args
+        return full_Ne_mauro(Ee, d, t)
     
-    result, error = quad(integrand, t_min, t_max, args=[Ee, d_mono, 1, e0_calc], limit=50)
+    result, _ = quad(integrand, t_min, t_max, args=[Ee, params.d], limit=50)
 
-    L0 = (1 + params.t_age/params.tau0)
-    Edot = params.Edot 
-    SCALING = L0 * Edot
-
-    return SCALING * result
+    return result
 
 def compute_single_energy(args):
     """Helper function for parallel computation"""
@@ -299,28 +131,27 @@ def main():
     print(f"Observation time: {params.tobs:.3e} s")
     print(f"tau0: {params.tau0:.3e} s")
     print()
-    # Create calculator once
-    e0_calc = E0Calculator(Emin=me, Emax=1e100, n_points=10000)
 
-
-    n_points = 3
+    n_points = 10
     Ees = np.logspace(np.log10(0.1), np.log10(1e6), n_points)
-    dNs = []
+    dNs_E_sq = []
     for i in range(len(Ees)):
-        t_test = params.t_age/2
-        d_test = 5  # distance of monogem in parsecs
-        
-        result = full_Ne_mauro(Ees[i], d_test, t_test, e0_calc)
-
-        L0 = (1 + params.t_age/params.tau0)
-        Edot = params.Edot 
-        SCALING = L0 * Edot
-
-        print(f"result is: {result}")
-        print(f"scaling is: {SCALING}")
+        dNs_E_sq.append(point_flux_dN_dEe(Ees[i]) * Ees[i]**3)
         
 
-        dNs.append(result*SCALING)
+    plt.figure()
+    plt.loglog(Ees, dNs_E_sq, marker='o')
+    plt.xlabel("Ee (GeV)")
+    plt.ylabel("dN/dEe * Ee^3")
+    plt.title("Point Flux Spectrum")
+    plt.grid(True, which="both", ls="--")
+
+    plt.savefig("spectrum.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+    np.savetxt("spectrum.txt", np.column_stack((Ees, dNs_E_sq)),
+           header="Ee dN/dEe")
+
 
 
     # SOMETHING TO DO!!!
@@ -329,8 +160,6 @@ def main():
     # FLUX IS AROUND 10^(-6) for 5 PARSECS AWAY FOR A GIVEN TIME FOR NO ENERGY LOSSES
     # AT 1 TeV electron
 
-    print(Ees)
-    print(dNs)
 
     # # Pass it to the parallel function
     # dNs, Ees = full_dN_dEe_spec_parallel(params.t_age, e0_calc, n_processes=8)

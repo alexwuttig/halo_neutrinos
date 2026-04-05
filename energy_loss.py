@@ -11,46 +11,36 @@ from conv_and_const_module import me
 import b_loss as b
 
 
-''' - - - - - - - - - - - - - - - - - - - - - - [ Checkpoint ] - - - - - - - - - - - - - - - - - - - - - - - - - '''
-
-def E0_approx_analytic(Ee, tau):
+def get_E0_approx(Ee, tau):
     b0 = 1.4e-16
-    # B(Ee) + tau = 1/b0 * (1/me - 1/Ee) + tau
-    # Invert: 1/E0 = 1/me - b0*(B(Ee) + tau)
-    B_val = (1/me - 1/Ee) / b0 + tau
-    inv_E0 = 1/me - b0 * B_val
+    inv_E0 = 1/Ee - b0 * tau
     if inv_E0 <= 0:
-        return np.inf  # electron couldn't have survived to Ee in time tau
-    return 1.0 / inv_E0
+        return np.inf
+    return 1 / inv_E0
 
-# ── B(E) antiderivative and spline ─────────────────────────────────────────────
-def B_anti(Ex, Emin=me):
+def B(Ex, Emin=me):
     """Integral of 1/b_tot from Emin to Ex."""
     pts = np.logspace(np.log10(Emin), np.log10(Ex), 200)
     # Lambda function optimization --> cool
     result, _ = quad((lambda E: 1.0 / b.b_tot(E)), Emin, Ex,
-                     points=pts, epsabs=1e-12, epsrel=1e-10, limit=500)
+                     points=pts, epsabs=1e-12, epsrel=1e-10, limit=1000)
     return result
 
-def build_E0_spline(Emin=me, Emax=1e7, n_points=1000):
+def build_E0_spline(Emin=me, Emax=1e8, n_points=10000):
     """
     Build inverse spline: B_value → E.
     Emax capped at 1e7 GeV — B(E) saturates beyond this,
     making inversion numerically unstable.
     """
     Es = np.logspace(np.log10(Emin), np.log10(Emax), n_points)
-    Bs = np.array([B_anti(E) for E in Es])
+    Bs = np.array([B(E) for E in Es])
     return interp1d(Bs, Es, kind='cubic', bounds_error=False, fill_value='extrapolate')
 
 E0_spline = build_E0_spline()
 
-def E0_val(Ee, tau):
+def get_E0(Ee, tau):
     """Initial energy of an electron observed at Ee after time tau."""
-    return float(E0_spline(B_anti(Ee) + tau))
-
-
-
-''' - - - - - - - - - - - - - - - - - - - - - - [ Old code below ] - - - - - - - - - - - - - - - - - - - - - - - - - '''
+    return float(E0_spline(B(Ee) + tau))
 
 
 # import numpy as np
