@@ -26,7 +26,9 @@ def H_one_zone(r, Ee, E0, rs=params.rs):
     dl_cm = diffusion_len(Ee, E0, del_r_cm)  # Returns cm
     
     if dl_cm == 0:
-        print(f"ERROR: diffusion length is zero! r={r}, Ee={Ee}, E0={E0}, dl={dl_cm} ")
+
+        # print(f"ERROR: diffusion length is zero! r={r}, Ee={Ee}, E0={E0}, dl={dl_cm} ")
+
         return 0
     
     term1 = 1/(np.pi**(3/2) * dl_cm**3)
@@ -50,7 +52,6 @@ def H_mauro(r, Ee, E0, rs = params.rs, rh = params.rh):
     Ee: current electron energy
     E0: injected electron energy
     rs: position of the source
-
 
     Note: In the H function there is the use of r. Unsure if this 
     is supposed to be del_r or just r. 
